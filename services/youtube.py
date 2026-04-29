@@ -3,10 +3,23 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
+from services.gemini import generate_video, generate_text_request
 
 SCOPES = ["https://www.googleapis.com/auth/youtube.upload"]
 TOKEN_FILE = "token.json"
 CLIENT_SECRET_FILE = "client_secret.json"
+
+
+def is_appropriate_content(prompt):
+  prompt = f"""Determine whether the following prompt will violate the youtube content policy. Respond with a boolean value. Specifically beware of any inappropriate content such asnudity, drugs alcohol, or violence. Respond in the following format {{ "valid": true }} Prompt: '{prompt}'"""
+
+  is_valid = generate_text_request(prompt)
+  if not is_valid:
+    print("Content violates YouTube policy. Aborting video generation.")
+    return False
+  
+  print("Content is valid. Proceeding with video generation.")
+  return True
 
 
 def get_authenticated_service():
@@ -60,8 +73,29 @@ def upload_video(youtube, file_path, title, description):
     print(response['status'])
 
     print("Upload complete!")
-    print("Video ID:", response["id"])
-    print("Video URL: https://www.youtube.com/watch?v=" + response["id"])
+    video_id = response["id"]
+    video_url = "https://www.youtube.com/watch?v=" + video_id
+    print("Video ID:", video_id)
+    print("Video URL:", video_url)
+    
+    return {"video_id": video_id, "video_url": video_url}
+
+
+def upload_video_from_prompt(prompt, youtube_app, title="AI Generated Video", description="Michael's AI generated video"):
+  if not is_appropriate_content(prompt):
+    raise Exception("Content violates YouTube policy. Aborting video generation.")
+
+  if not youtube_app:
+    raise Exception("User not authenticated with YouTube. Please log in first.")
+  
+  video_name = generate_video(prompt)
+
+  return upload_video(
+      youtube_app,
+      file_path=f"/Users/mgulson2/code/michaelbot/{video_name}",
+      title=title,
+      description=description
+  )
 
 
 if __name__ == "__main__":

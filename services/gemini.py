@@ -3,12 +3,12 @@ from google import genai
 from google.genai import types
 import os
 import datetime
+import json
 
+
+client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 
 def generate_video(prompt):
-  client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
-
-
   operation = client.models.generate_videos(
       model="veo-3.1-generate-preview",
       prompt=prompt,
@@ -34,8 +34,22 @@ def generate_video(prompt):
 
 
 def generate_text_request(prompt):
+  response_schema = {
+        "type": "object",
+        "properties": {
+          "valid": {
+            "type": "boolean"
+          }
+        }
+    }
+  client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
   operation = client.models.generate_content(
-      model="gemini-2.0-flash",
-      prompt=prompt,
+      model="gemini-2.5-flash",
+      contents=prompt,
+      config=types.GenerateContentConfig(
+        response_mime_type="application/json",
+        response_schema=response_schema
+      )
+    
   )
-  return operation.response
+  return json.loads(operation.text).get("valid", False)

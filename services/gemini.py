@@ -6,6 +6,7 @@ import datetime
 import json
 
 
+
 client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 
 def generate_video(prompt):

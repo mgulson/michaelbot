@@ -1,13 +1,22 @@
 import os
-from google_auth_oauthlib.flow import InstalledAppFlow
+from google_auth_oauthlib.flow import Flow
 from google.oauth2.credentials import Credentials
+from googleapiclient.errors import HttpError
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 from services.gemini import generate_video, generate_text_request
 
-SCOPES = ["https://www.googleapis.com/auth/youtube.upload"]
+os.environ["OAUTHLIB_INSECURE_TRANSPORT"] = "1"
+
+SCOPES = [
+  "https://www.googleapis.com/auth/youtube.upload",
+  "https://www.googleapis.com/auth/youtube.readonly",
+]
 TOKEN_FILE = "token.json"
-CLIENT_SECRET_FILE = "client_secret.json"
+CLIENT_SECRET_FILE = "client_secret_5_17_26.json"
+
+# Global variable to store the flow state between auth and callback
+_flow = None
 
 
 def is_appropriate_content(prompt):
@@ -21,24 +30,29 @@ def is_appropriate_content(prompt):
   print("Content is valid. Proceeding with video generation.")
   return True
 
+# TODO DELETE
+# def get_authenticated_service():
+#     creds = None
 
-def get_authenticated_service():
-    creds = None
+#     if os.path.exists(TOKEN_FILE):
+#         creds = Credentials.from_authorized_user_file(TOKEN_FILE, SCOPES)
 
-    if os.path.exists(TOKEN_FILE):
-        creds = Credentials.from_authorized_user_file(TOKEN_FILE, SCOPES)
+#     if not creds or not creds.valid:
+#         flow = Flow.from_client_secrets_file(
+#         CLIENT_SECRET_FILE,
+#         scopes=SCOPES,
+#         )
+#         auth_url, state = flow.authorization_url(prompt='consent')
+        
+#         authorization_response = 
+#         flow.fetch_token(authorization_response=authorization_response)
+        
+#         creds = flow.credentials
 
-    if not creds or not creds.valid:
-        flow = InstalledAppFlow.from_client_secrets_file(
-            CLIENT_SECRET_FILE,
-            SCOPES
-        )
-        creds = flow.run_local_server(port=0)
+#         with open(TOKEN_FILE, "w") as token:
+#             token.write(creds.to_json())
 
-        with open(TOKEN_FILE, "w") as token:
-            token.write(creds.to_json())
-
-    return build("youtube", "v3", credentials=creds)
+#     return build("youtube", "v3", credentials=creds)
 
 
 def upload_video(youtube, file_path, title, description):
@@ -96,6 +110,59 @@ def upload_video_from_prompt(prompt, youtube_app, title="AI Generated Video", de
       title=title,
       description=description
   )
+
+
+def verify_youtube_login(youtube_app):
+  if not youtube_app:
+    return {"logged_in": False, "message": "No YouTube client cached."}
+
+  try:
+    response = youtube_app.channels().list(
+      part="id",
+      mine=True,
+      maxResults=1,
+    ).execute()
+
+  except Exception as e:
+    return {"logged_in": False, "message": f"YouTube credential check failed: {str(e)}"}
+
+  items = response.get("items", [])
+  if not items:
+    return {"logged_in": False, "message": "Authenticated Google account has no YouTube channel."}
+
+  return {
+    "logged_in": True,
+    "channel_id": items[0].get("id"),
+  }
+
+
+def get_auth_url():
+    """Generate the OAuth authorization URL"""
+    global _flow
+    _flow = Flow.from_client_secrets_file(
+        CLIENT_SECRET_FILE,
+        scopes=SCOPES,
+        redirect_uri="http://localhost:3000/oauth2callback"
+
+    )
+    auth_url, state = _flow.authorization_url(prompt='consent')
+    return auth_url, state
+
+
+def handle_oauth_callback(authorization_response):
+    """Handle the full OAuth callback URL returned by Google."""
+    global _flow
+    if _flow is None:
+        raise ValueError("OAuth flow not initialized. Visit /auth before opening the callback URL.")
+    
+    _flow.fetch_token(authorization_response=authorization_response)
+    creds = _flow.credentials
+    
+    # Save credentials for future use
+    with open(TOKEN_FILE, "w") as token:
+        token.write(creds.to_json())
+    
+    return build("youtube", "v3", credentials=creds)
 
 
 if __name__ == "__main__":

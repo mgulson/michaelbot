@@ -1,8 +1,13 @@
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse as jsonResponse, RedirectResponse
+from dotenv import load_dotenv
 import uvicorn
+
+load_dotenv()
+
 from services.youtube import upload_video, upload_video_from_prompt, get_auth_url, handle_oauth_callback, verify_youtube_login
+
 
 app = FastAPI()
 app.add_middleware(
@@ -49,6 +54,8 @@ def check_login():
 @app.post("/generate_video")
 def generate_video(request: Request):
   prompt = request.query_params.get("prompt", "")
+  if len(prompt) == 0:
+     return jsonResponse({"message": "prompt is required"}, status_code=400)
   global youtube_cache
   if not youtube_cache:
     return jsonResponse({"message": "User not authenticated with YouTube. Please log in first on the /login endpoint."}, status_code=401)

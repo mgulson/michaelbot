@@ -18,6 +18,7 @@ CLIENT_SECRET_FILE = "client_secret_5_17_26.json"
 # Global variable to store the flow state between auth and callback
 _flow = None
 
+DISABLE_VIDEO_GENERATION = os.getenv("DISABLE_VIDEO_GENERATION", "False").lower() in ("true", "True")
 
 def is_appropriate_content(prompt):
   prompt = f"""Determine whether the following prompt will violate the youtube content policy. Respond with a boolean value. Specifically beware of any inappropriate content such asnudity, drugs alcohol, or violence. Respond in the following format {{ "valid": true }} Prompt: '{prompt}'"""
@@ -95,6 +96,8 @@ def upload_video(youtube, file_path, title, description):
     return {"video_id": video_id, "video_url": video_url}
 
 
+  
+
 def upload_video_from_prompt(prompt, youtube_app, title="AI Generated Video", description="Michael's AI generated video"):
   if not is_appropriate_content(prompt):
     raise Exception("Content violates YouTube policy. Aborting video generation.")
@@ -102,11 +105,14 @@ def upload_video_from_prompt(prompt, youtube_app, title="AI Generated Video", de
   if not youtube_app:
     raise Exception("User not authenticated with YouTube. Please log in first.")
   
-  video_name = generate_video(prompt)
+  if DISABLE_VIDEO_GENERATION:
+    video_name = "tech_news_video_6_27_26.mp4"
+  else:
+    video_name = generate_video(prompt)
 
   return upload_video(
       youtube_app,
-      file_path=f"/Users/mgulson2/code/michaelbot/{video_name}",
+      file_path=f"/Users/mgulson2/code/michaelbot/videos/{video_name}",
       title=title,
       description=description
   )
